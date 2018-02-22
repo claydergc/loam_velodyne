@@ -44,6 +44,10 @@
 #include <ros/node_handle.h>
 #include <sensor_msgs/Imu.h>
 #include <pcl/point_cloud.h>
+#include <pcl/common/distances.h>
+
+#include "css.h"
+#include "gaussians.h"
 
 
 namespace loam {
@@ -221,6 +225,8 @@ protected:
    * @param beginIdx the index of the first scan to extract features from
    */
   void extractFeatures(const uint16_t& beginIdx = 0);
+  //void extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans);
+  void extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans, pcl::PointCloud<pcl::PointXYZI>& downsampledCloud);
 
   /** \brief Set up region buffers for the specified point range.
    *
@@ -249,8 +255,13 @@ protected:
   void markAsPicked(const size_t& cloudIdx,
                     const size_t& scanIdx);
 
+  void markAsPicked2(const size_t& cloudIdx,
+                    const size_t& scanIdx);
+
+
   /** \brief Publish the current result via the respective topics. */
-  void publishResult();
+  //void publishResult();
+  void publishResult(pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer);
 
 
 private:
@@ -291,11 +302,21 @@ protected:
   ros::Subscriber _subImu;    ///< IMU message subscriber
 
   ros::Publisher _pubLaserCloud;              ///< full resolution cloud message publisher
+  
   ros::Publisher _pubCornerPointsSharp;       ///< sharp corner cloud message publisher
+  
   ros::Publisher _pubCornerPointsLessSharp;   ///< less sharp corner cloud message publisher
   ros::Publisher _pubSurfPointsFlat;          ///< flat surface cloud message publisher
   ros::Publisher _pubSurfPointsLessFlat;      ///< less flat surface cloud message publisher
   ros::Publisher _pubImuTrans;                ///< IMU transformation message publisher
+
+  pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer;  ///< less flat surface points cloud
+  ros::Publisher pubLaserLayer;
+
+  //Agregado por Clayder
+  //std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans;
+  std::vector<float> gaussian1[160];
+  std::vector<float> gaussian2[160];
 };
 
 } // end namespace loam

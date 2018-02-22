@@ -503,7 +503,7 @@ void LaserOdometry::process()
 
         if (iterCount % 5 == 0) {
           pcl::removeNaNFromPointCloud(*_lastCornerCloud, *_lastCornerCloud, indices);
-          _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
+          _lastCornerKDTree.nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);//vecino mas cercano
 
           int closestPointInd = -1, minPointInd2 = -1;
           if (pointSearchSqDis[0] < 25) {
@@ -600,7 +600,7 @@ void LaserOdometry::process()
             _coeffSel->push_back(coeff);
           }
         }
-      }
+      }//end cornerPointsSharpNum
 
       for (int i = 0; i < surfPointsFlatNum; i++) {
         transformToStart(_surfPointsFlat->points[i], pointSel);
@@ -700,7 +700,7 @@ void LaserOdometry::process()
             _coeffSel->push_back(coeff);
           }
         }
-      }
+      }// end surfPointsFlatNum
 
       int pointSelNum = _laserCloudOri->points.size();
       if (pointSelNum < 10) {

@@ -133,6 +133,13 @@ bool MultiScanRegistration::setup(ros::NodeHandle& node,
   _subLaserCloud = node.subscribe<sensor_msgs::PointCloud2>
       ("/multi_scan_points", 2, &MultiScanRegistration::handleCloudMessage, this);
 
+  //_subLaserCloud = node.subscribe<sensor_msgs::PointCloud2>
+  //    ("/velodyne_points", 2, &MultiScanRegistration::handleCloudMessage, this);
+
+
+  //Linea agregada por Clayder para iniciar filtros gaussianos
+  initKernels(gaussian1, gaussian2);
+
   return true;
 }
 
@@ -174,11 +181,16 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
 
   bool halfPassed = false;
   pcl::PointXYZI point;
+
   std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans(_scanMapper.getNumberOfScanRings());
+  //agregado por Clayder para tener acceso a cada ring
+  //laserCloudScans = std::vector<pcl::PointCloud<pcl::PointXYZI> >(_scanMapper.getNumberOfScanRings());
+  //laserCloudScans.clear();
+  //agregado por Clayder para tener acceso a cada ring
 
   // extract valid points from input cloud
   for (int i = 0; i < cloudSize; i++) {
-    point.x = laserCloudIn[i].y;
+    point.x = laserCloudIn[i].y;//aqui cambia la orientacion de las coordenadas
     point.y = laserCloudIn[i].z;
     point.z = laserCloudIn[i].x;
 
@@ -233,8 +245,16 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
       transformToStartIMU(point);
     }
 
+    //std::cout<<"scan id: "<<scanID<<std::endl;
+
     laserCloudScans[scanID].push_back(point);
   }
+
+  //Agreagado por Clayder
+  pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer(new pcl::PointCloud<pcl::PointXYZI>());//organized cloud by ring
+  //*laserLayer = laserCloudScans[5];
+  //std::cout<<"CLOUD SIZE: "<<laserLayer->points.size()<<std::endl;
+  //Agreagado por Clayder
 
   // construct sorted full resolution cloud
   cloudSize = 0;
@@ -248,10 +268,15 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   }
 
   // extract features
-  extractFeatures();
+  //extractFeatures();
+
+  // linea agregada por Clayder para extraer features CSS
+  //extractFeaturesCSS(laserCloudScans);
+  extractFeaturesCSS(laserCloudScans, *laserLayer);
 
   // publish result
-  publishResult();
+  //publishResult();
+  publishResult(laserLayer);
 }
 
 } // end namespace loam

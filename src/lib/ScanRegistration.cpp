@@ -62,7 +62,6 @@ RegistrationParams::RegistrationParams(const float& scanPeriod_,
 };
 
 
-
 bool RegistrationParams::parseParams(const ros::NodeHandle& nh) {
   bool success = true;
   int iParam = 0;
@@ -205,11 +204,16 @@ bool ScanRegistration::setup(ros::NodeHandle& node,
 
   // advertise scan registration topics
   _pubLaserCloud = node.advertise<sensor_msgs::PointCloud2>("/velodyne_cloud_2", 2);
+  
   _pubCornerPointsSharp = node.advertise<sensor_msgs::PointCloud2>("/laser_cloud_sharp", 2);
+  
   _pubCornerPointsLessSharp = node.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_sharp", 2);
   _pubSurfPointsFlat = node.advertise<sensor_msgs::PointCloud2>("/laser_cloud_flat", 2);
   _pubSurfPointsLessFlat = node.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_flat", 2);
   _pubImuTrans = node.advertise<sensor_msgs::PointCloud2>("/imu_trans", 5);
+
+  //Agregado por clayder para ver si es dividido por capas
+  pubLaserLayer = node.advertise<sensor_msgs::PointCloud2> ("/laser_layer", 2);
 
   return true;
 }
@@ -325,12 +329,13 @@ void ScanRegistration::interpolateIMUStateFor(const float &relTime,
   }
 }
 
-
-
 void ScanRegistration::extractFeatures(const uint16_t& beginIdx)
 {
   // extract features from individual scans
   size_t nScans = _scanIndices.size();
+
+  //cout<<"nScans: "<<nScans<<endl;
+
   for (size_t i = beginIdx; i < nScans; i++) {
     pcl::PointCloud<pcl::PointXYZI>::Ptr surfPointsLessFlatScan(new pcl::PointCloud<pcl::PointXYZI>);
     size_t scanStartIdx = _scanIndices[i].first;
@@ -381,11 +386,11 @@ void ScanRegistration::extractFeatures(const uint16_t& beginIdx)
           largestPickedNum++;
           if (largestPickedNum <= _config.maxCornerSharp) {
             _regionLabel[regionIdx] = CORNER_SHARP;
-            _cornerPointsSharp.push_back(_laserCloud[idx]);
+            //_cornerPointsSharp.push_back(_laserCloud[idx]);
           } else {
             _regionLabel[regionIdx] = CORNER_LESS_SHARP;
           }
-          _cornerPointsLessSharp.push_back(_laserCloud[idx]);
+          //_cornerPointsLessSharp.push_back(_laserCloud[idx]);
 
           markAsPicked(idx, scanIdx);
         }
@@ -424,11 +429,395 @@ void ScanRegistration::extractFeatures(const uint16_t& beginIdx)
     downSizeFilter.setLeafSize(_config.lessFlatFilterSize, _config.lessFlatFilterSize, _config.lessFlatFilterSize);
     downSizeFilter.filter(surfPointsLessFlatScanDS);
 
+    //std::cout<<"layer size ("<<i<<"): "<<(scanEndIdx-scanStartIdx)<<std::endl;
+    //std::cout<<"_surfacePointsLessFlatScanDS ("<<i<<")->size: "<<surfPointsLessFlatScanDS.size()<<std::endl;
+
     _surfacePointsLessFlat += surfPointsLessFlatScanDS;
   }
 }
 
+//void clusterize(pcl::PointCloud<pcl::PointXYZI> cloud, std::vector< pcl::PointCloud<pcl::PointXYZI> >& clusters, double minClusterPoints, double maxClusterPoints)
+//void clusterize(pcl::PointCloud<pcl::PointXYZI> cloud, std::vector< pcl::PointCloud<pcl::PointXYZI> >& clusters, int minClusterPoints, int maxClusterPoints)
+void clusterize(pcl::PointCloud<pcl::PointXYZI> cloud, std::vector< pcl::PointCloud<pcl::PointXYZI> >& clusters, std::vector< std::vector<int> >& indices, int minClusterPoints, int maxClusterPoints)
+{
+    bool isDiscontinuous[cloud.size()];
+    float Dmax;
+    float r;
+    float deltaPhi = 0.25 * M_PI / 180.0;
+    float stdDev = 0.01;
+    float lambda = 10 * M_PI / 180.0;
+    pcl::PointXYZI p0,p1;
+    int numClusters = 0;
 
+    for(int i = 0 ; i < cloud.size() ; ++i)
+    {
+      //p0 = (cloud)[i];
+      //p1 = (cloud)[(i+1)%cloud.size()];
+      //r = sqrt( p0.x*p0.x + p0.y*p0.y + p0.z*p0.z );
+      p0.x = (cloud)[i].x;
+      p0.y = 0;
+      p0.z = (cloud)[i].z;
+      p0.intensity = (cloud)[i].intensity;
+      p1.x = (cloud)[(i+1)%cloud.size()].x;
+      p1.y = 0;
+      p1.z = (cloud)[(i+1)%cloud.size()].z;
+      p1.intensity = (cloud)[(i+1)%cloud.size()].intensity;
+      r = sqrt( p0.x*p0.x + p0.z*p0.z );
+      Dmax = r * (sin(deltaPhi)/sin(lambda-deltaPhi)) + 3*stdDev;
+
+        if(pcl::euclideanDistance(p0,p1)>Dmax)
+        {
+          isDiscontinuous[(i+1)%cloud.size()] = true;
+          numClusters++;
+        }else{
+          isDiscontinuous[(i+1)%cloud.size()] = false;
+        }
+    }
+
+    int clustersArray[numClusters];
+    int n = 0;
+
+    pcl::PointCloud<pcl::PointXYZI> cloud_cluster;
+      
+    for(int i = 0; i < cloud.size(); ++i)
+      if(isDiscontinuous[i])
+          clustersArray[n++]=i;
+
+    
+    //indices = std::vector< std::vector<int> >(numClusters);
+    //std::cout<<"size000: "<<numClusters<<std::endl;
+    std::vector<int> clusterIndices;
+
+
+    for(int i=0; i<numClusters; ++i)
+    {
+      int pointsPerCluster = (clustersArray[(i+1)%numClusters]-clustersArray[i]+cloud.size())%cloud.size();//numero de puntos de cada cluster
+      
+      if (pointsPerCluster<minClusterPoints || pointsPerCluster>maxClusterPoints)
+        continue;
+    
+      cloud_cluster.clear();
+      
+      for(int j=clustersArray[i] ; j!=clustersArray[(i+1)%numClusters] ; j=(j+1)%cloud.size())
+      {
+        cloud_cluster.push_back((cloud)[j]);
+        //indices[i].push_back(j);
+        clusterIndices.push_back(j);
+      }
+
+      clusters.push_back(cloud_cluster);
+      indices.push_back(clusterIndices);
+      clusterIndices.clear();
+    }
+
+    //std::cout<<"size001: "<<indices.size()<<std::endl;
+    //std::cout<<"size002: "<<clusters.size()<<std::endl;    
+}
+
+
+bool isIn(int a, std::vector<int> vec)
+{
+  for(int i=0; i<vec.size(); ++i)
+    if(a==vec[i])
+      return true;
+
+  return false;
+}
+
+void printVector(std::vector<int> vec)
+{
+  for(int i=0; i<vec.size(); ++i)
+    std::cout<<vec[i]<<", ";
+
+  std::cout<<std::endl;
+}
+
+//void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans)
+void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans, pcl::PointCloud<pcl::PointXYZI>& downsampledCloud)
+{
+  int i=0;
+
+
+  for(std::vector< pcl::PointCloud<pcl::PointXYZI> >::iterator it = laserCloudScans.begin(); it != laserCloudScans.end(); ++it)
+  //for(std::vector< pcl::PointCloud<pcl::PointXYZI> >::iterator it = laserCloudScans.begin(); it != laserCloudScans.end(); it+=2)
+  {
+      std::vector< std::vector<int> > clusterIndices;
+      std::vector<int> sharpIndices;
+      std::vector< pcl::PointCloud<pcl::PointXYZI> > clusters;
+      //clusterize(*it, clusters, clusterIndices, 30, 400);
+      clusterize(*it, clusters, clusterIndices, 25, 400);
+      std::vector<Keypoint> sharpKeypointsPerScan;
+      std::vector<Keypoint> flatKeypointsPerScan;
+
+      int j,k;
+
+      int c=0;
+
+
+      pcl::PointCloud<pcl::PointXYZI>::Ptr surfPointsLessFlatScan(new pcl::PointCloud<pcl::PointXYZI>);
+      size_t scanStartIdx = _scanIndices[i].first;
+      size_t scanEndIdx = _scanIndices[i].second;
+      int index, scanIndex;
+
+      if (scanEndIdx <= scanStartIdx + 2 * _config.curvatureRegion) {
+        continue;
+      }
+
+
+      // reset scan buffers
+      setScanBuffersFor(scanStartIdx, scanEndIdx);
+
+      for (std::vector< pcl::PointCloud<pcl::PointXYZI> >::iterator it2 = clusters.begin() ; it2 != clusters.end(); ++it2)
+      {
+          std::vector<CurvatureTriplet> keypoints[16];
+          std::vector<float> curvatureMaxScale;
+          std::vector<float> s;
+          
+          std::vector<Keypoint> sharpKeypoints, flatKeypoints;
+          pcl::PointCloud<pcl::PointXYZI> lessFlatKeypoints;
+
+
+          /*std::stringstream ss2;
+          ss2 << "/home/claydergc/catkin_ws/outdoor_clusters/object_"<<i<<"_"<<c<<".pcd";
+          pcl::io::savePCDFile<pcl::PointXYZI>(ss2.str (), *it2);*/
+
+          computeScaleSpace(*it2, gaussian1, gaussian2, keypoints, s, curvatureMaxScale);
+          getFinalKeypointsAtMinScale(*it2, keypoints, s, curvatureMaxScale, c, sharpKeypoints, flatKeypoints, lessFlatKeypoints);
+
+          if(clusters.size()<=_config.nFeatureRegions)
+          {
+            sort(sharpKeypoints.begin(), sharpKeypoints.end(), compareKeypoints);
+
+            for(j=0; j<_config.maxCornerSharp && j<sharpKeypoints.size(); ++j)
+            {
+              _cornerPointsSharp.push_back(sharpKeypoints[j].keypoint);
+              _cornerPointsLessSharp.push_back(sharpKeypoints[j].keypoint);
+              sharpIndices.push_back(clusterIndices[sharpKeypoints[j].cluster][sharpKeypoints[j].index]);
+              index = clusterIndices[sharpKeypoints[j].cluster][sharpKeypoints[j].index] + scanStartIdx;
+              scanIndex = index - scanStartIdx;
+              markAsPicked2(index, scanIndex);
+            }
+
+            for(k=j; k<_config.maxCornerLessSharp+j && k<sharpKeypoints.size(); ++k)
+            //for(k=j; k<sharpKeypoints.size(); ++k)
+            {
+              _cornerPointsLessSharp.push_back(sharpKeypoints[j].keypoint);
+              sharpIndices.push_back(clusterIndices[sharpKeypoints[j].cluster][sharpKeypoints[j].index]);
+              index = clusterIndices[sharpKeypoints[j].cluster][sharpKeypoints[j].index] + scanStartIdx;
+              scanIndex = index - scanStartIdx;
+              markAsPicked2(index, scanIndex);
+            }
+          }
+          else
+          {
+            sharpKeypointsPerScan.insert(sharpKeypointsPerScan.end(), sharpKeypoints.begin(), sharpKeypoints.end());
+          }
+
+          c++;
+      }
+
+      if(clusters.size()>_config.nFeatureRegions)
+      {
+        sort(sharpKeypointsPerScan.begin(), sharpKeypointsPerScan.end(), compareKeypoints);
+
+        for(j=0; j<_config.maxCornerSharp*_config.nFeatureRegions && j<sharpKeypointsPerScan.size(); ++j)
+        {
+          _cornerPointsSharp.push_back(sharpKeypointsPerScan[j].keypoint);
+          _cornerPointsLessSharp.push_back(sharpKeypointsPerScan[j].keypoint);
+          sharpIndices.push_back(clusterIndices[sharpKeypointsPerScan[j].cluster][sharpKeypointsPerScan[j].index]);
+          index = clusterIndices[sharpKeypointsPerScan[j].cluster][sharpKeypointsPerScan[j].index] + scanStartIdx;
+          scanIndex = index - scanStartIdx;
+          markAsPicked2(index, scanIndex);
+        }
+
+        for(k=j; k<_config.maxCornerLessSharp*_config.nFeatureRegions+j && k<sharpKeypointsPerScan.size(); ++k)
+        //for(k=j; k<sharpKeypointsPerScan.size(); ++k)
+        {
+          _cornerPointsLessSharp.push_back(sharpKeypointsPerScan[k].keypoint);
+          sharpIndices.push_back(clusterIndices[sharpKeypointsPerScan[j].cluster][sharpKeypointsPerScan[j].index]);
+          index = clusterIndices[sharpKeypointsPerScan[j].cluster][sharpKeypointsPerScan[j].index] + scanStartIdx;
+          scanIndex = index - scanStartIdx;
+          markAsPicked2(index, scanIndex);
+        }
+        
+      }
+
+      //std::cout<<"Hola1"<<std::endl;
+
+      // extract features from equally sized scan regions
+      for (int j = 0; j < _config.nFeatureRegions; j++) {
+        size_t sp = ((scanStartIdx + _config.curvatureRegion) * (_config.nFeatureRegions - j)
+                     + (scanEndIdx - _config.curvatureRegion) * j) / _config.nFeatureRegions;
+        size_t ep = ((scanStartIdx + _config.curvatureRegion) * (_config.nFeatureRegions - 1 - j)
+                     + (scanEndIdx - _config.curvatureRegion) * (j + 1)) / _config.nFeatureRegions - 1;
+
+        // skip empty regions
+        if (ep <= sp) {
+          continue;
+        }
+
+        size_t regionSize = ep - sp + 1;
+
+        // reset region buffers
+        setRegionBuffersFor(sp, ep);
+
+        // extract corner features
+        int largestPickedNum = 0;
+        for (size_t k = regionSize; k > 0 && largestPickedNum < _config.maxCornerLessSharp;) {
+          size_t idx = _regionSortIndices[--k];
+          size_t scanIdx = idx - scanStartIdx;
+          size_t regionIdx = idx - sp;
+
+          if (_scanNeighborPicked[scanIdx] == 0 &&
+              _regionCurvature[regionIdx] > _config.surfaceCurvatureThreshold) {
+
+            largestPickedNum++;
+            if (largestPickedNum <= _config.maxCornerSharp) {
+              _regionLabel[regionIdx] = CORNER_SHARP;
+              //_cornerPointsSharp.push_back(_laserCloud[idx]);
+            } else {
+              _regionLabel[regionIdx] = CORNER_LESS_SHARP;
+            }
+            //_cornerPointsLessSharp.push_back(_laserCloud[idx]);
+
+            markAsPicked(idx, scanIdx);
+          }
+        }
+
+        // extract flat surface features
+        int smallestPickedNum = 0;
+        for (int k = 0; k < regionSize && smallestPickedNum < _config.maxSurfaceFlat; k++) {
+          size_t idx = _regionSortIndices[k];
+          size_t scanIdx = idx - scanStartIdx;
+          size_t regionIdx = idx - sp;
+
+          //if (_scanNeighborPicked[scanIdx] == 0 &&
+          //    _regionCurvature[regionIdx] < _config.surfaceCurvatureThreshold) {
+          //if (!isIn(scanIdx, sharpIndices) &&
+          //    _regionCurvature[regionIdx] < _config.surfaceCurvatureThreshold) {
+          if (_scanNeighborPicked[scanIdx] == 0 && !isIn(scanIdx, sharpIndices) &&
+              _regionCurvature[regionIdx] < _config.surfaceCurvatureThreshold) {
+
+            smallestPickedNum++;
+            _regionLabel[regionIdx] = SURFACE_FLAT;
+            _surfacePointsFlat.push_back(_laserCloud[idx]);
+
+            markAsPicked(idx, scanIdx);
+          }
+        }
+
+        // extract less flat surface features
+        for (int k = 0; k < regionSize; k++) {
+          size_t idx = _regionSortIndices[k];
+          size_t scanIdx = idx - scanStartIdx;
+
+          //if (_regionLabel[k] <= SURFACE_LESS_FLAT) {
+          //if (_scanNeighborPicked[scanIdx] == 0 ) {
+          if(!isIn(scanIdx, sharpIndices)) {
+            surfPointsLessFlatScan->push_back(_laserCloud[sp + k]);
+          }
+        }
+      }
+
+      // down size less flat surface point cloud of current scan
+      pcl::PointCloud<pcl::PointXYZI> surfPointsLessFlatScanDS;
+      pcl::VoxelGrid<pcl::PointXYZI> downSizeFilter;
+      downSizeFilter.setInputCloud(surfPointsLessFlatScan);
+      downSizeFilter.setLeafSize(_config.lessFlatFilterSize, _config.lessFlatFilterSize, _config.lessFlatFilterSize);
+      downSizeFilter.filter(surfPointsLessFlatScanDS);
+
+      _surfacePointsLessFlat += surfPointsLessFlatScanDS;
+
+
+      //std::cout<<"Hola2"<<std::endl;
+
+      //extract _surfacePointsLessFlat
+      /*int a=0;
+      PointCloud<PointXYZI> downsampledCloudResult;
+      PointCloud<PointXYZI>::Ptr downsampledCloudTmp(new pcl::PointCloud<pcl::PointXYZI>);;
+
+      pcl::VoxelGrid<pcl::PointXYZI> downSizeFilter;
+      downSizeFilter.setLeafSize(_config.lessFlatFilterSize, _config.lessFlatFilterSize, _config.lessFlatFilterSize);
+
+      if(!sharpIndices.empty())
+      {
+        for (pcl::PointCloud<pcl::PointXYZI>::iterator it2 = it->begin() ; it2 != it->end(); ++it2)
+        {
+          if(!isIn(a, sharpIndices))
+          {
+            //std::cout<<"Hola1"<<std::endl;
+            downsampledCloudTmp->push_back(*it2);
+            //std::cout<<"Hola1.1"<<std::endl;          
+          }
+          else if(isIn(a, sharpIndices))
+          {
+            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 7, 0.85);
+            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 5, 0.85);
+            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 3);
+            //std::cout<<"Hola2"<<std::endl;
+            downSizeFilter.setInputCloud(downsampledCloudTmp);        
+            downSizeFilter.filter(downsampledCloudResult);
+            //std::cout<<"size:"<<downsampledCloudResult.size()<<std::endl;
+
+            if(!downsampledCloudResult.empty())
+            {
+              _surfacePointsFlat.push_back(downsampledCloudResult[downsampledCloudResult.size()/2]);
+              downsampledCloud += downsampledCloudResult;
+            }
+            
+            downsampledCloudResult.clear();
+            downsampledCloudTmp->clear();
+            //std::cout<<"Hola2.1"<<std::endl;
+          }
+          
+          if(a==it->size()-1)
+          {
+            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 7, 0.85);
+            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 5, 0.85);
+            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 3);
+            //std::cout<<"Hola3"<<std::endl;
+            downSizeFilter.setInputCloud(downsampledCloudTmp);            
+            downSizeFilter.filter(downsampledCloudResult);
+            //std::cout<<"size:"<<downsampledCloudResult.size()<<std::endl;
+            if(!downsampledCloudResult.empty())
+            {
+              _surfacePointsFlat.push_back(downsampledCloudResult[downsampledCloudResult.size()/2]);
+              downsampledCloud += downsampledCloudResult;
+            }
+
+            downsampledCloudResult.clear();
+            downsampledCloudTmp->clear(); 
+            //std::cout<<"Hola3.1"<<std::endl;
+          }
+          a++;
+        }
+      }
+      else
+      {
+        //std::cout<<"Hola4"<<std::endl;
+        *downsampledCloudTmp = *it;
+        //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 7, 0.85);
+        //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 5, 0.85);
+        //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 3);
+        downSizeFilter.setInputCloud(downsampledCloudTmp);        
+        downSizeFilter.filter(downsampledCloudResult);
+        //std::cout<<"size:"<<downsampledCloudResult.size()<<std::endl;
+        if(!downsampledCloudResult.empty())
+        {
+          _surfacePointsFlat.push_back(downsampledCloudResult[downsampledCloudResult.size()/2]);
+          downsampledCloud += downsampledCloudResult;
+        }
+        
+        downsampledCloudResult.clear();
+        downsampledCloudTmp->clear();
+        //std::cout<<"Hola4.1"<<std::endl;
+      }
+      _surfacePointsLessFlat += downsampledCloud;*/
+      //extract _surfacePointsLessFlat
+
+    i++;
+  }
+}
 
 void ScanRegistration::setRegionBuffersFor(const size_t& startIdx,
                                            const size_t& endIdx)
@@ -525,7 +914,6 @@ void ScanRegistration::markAsPicked(const size_t& cloudIdx,
     if (calcSquaredDiff(_laserCloud[cloudIdx + i], _laserCloud[cloudIdx + i - 1]) > 0.05) {
       break;
     }
-
     _scanNeighborPicked[scanIdx + i] = 1;
   }
 
@@ -533,21 +921,49 @@ void ScanRegistration::markAsPicked(const size_t& cloudIdx,
     if (calcSquaredDiff(_laserCloud[cloudIdx - i], _laserCloud[cloudIdx - i + 1]) > 0.05) {
       break;
     }
+    _scanNeighborPicked[scanIdx - i] = 1;
+  }
+}
 
+void ScanRegistration::markAsPicked2(const size_t& cloudIdx,
+                                    const size_t& scanIdx)
+{
+  _scanNeighborPicked[scanIdx] = 1;
+
+  for (int i = 1; i <= _config.curvatureRegion && (cloudIdx+i)<_laserCloud.size(); i++) {
+    if (calcSquaredDiff(_laserCloud[cloudIdx + i], _laserCloud[cloudIdx + i - 1]) > 0.05) {
+      break;
+    }
+    _scanNeighborPicked[scanIdx + i] = 1;
+  }
+
+  for (int i = 1; i <= _config.curvatureRegion && (cloudIdx-i)>-1; i++) {
+    if (calcSquaredDiff(_laserCloud[cloudIdx - i], _laserCloud[cloudIdx - i + 1]) > 0.05) {
+      break;
+    }
     _scanNeighborPicked[scanIdx - i] = 1;
   }
 }
 
 
 
-void ScanRegistration::publishResult()
+//void ScanRegistration::publishResult()
+void ScanRegistration::publishResult(pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer)
 {
   // publish full resolution and feature point clouds
   publishCloudMsg(_pubLaserCloud,            _laserCloud,            _sweepStart, "/camera");
+  
+  //_cornerPointsSharp.clear();
   publishCloudMsg(_pubCornerPointsSharp,     _cornerPointsSharp,     _sweepStart, "/camera");
+  
   publishCloudMsg(_pubCornerPointsLessSharp, _cornerPointsLessSharp, _sweepStart, "/camera");
   publishCloudMsg(_pubSurfPointsFlat,        _surfacePointsFlat,     _sweepStart, "/camera");
   publishCloudMsg(_pubSurfPointsLessFlat,    _surfacePointsLessFlat, _sweepStart, "/camera");
+
+  sensor_msgs::PointCloud2 laserLayerMsg;
+  pcl::toROSMsg(*laserLayer, laserLayerMsg);
+  laserLayerMsg.header.frame_id = "/camera";
+  pubLaserLayer.publish(laserLayerMsg);
 
 
   // publish corresponding IMU transformation information
