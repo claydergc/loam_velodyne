@@ -84,8 +84,7 @@ void computeScaleSpace(pcl::PointCloud<pcl::PointXYZI> in, std::vector<float> ga
 
 
 void getFinalKeypointsAtMinScale(pcl::PointCloud<pcl::PointXYZI> in, std::vector<CurvatureTriplet> keypoints[NUM_SCALES], std::vector<float> s,
-								 std::vector<float> curvatureMaxScale, int cluster, std::vector<Keypoint>& cornerKeypoints, std::vector<Keypoint>& flatKeypoints,
-								 pcl::PointCloud<pcl::PointXYZI>& downsampledKeypoints);
+								 std::vector<float> curvatureMaxScale, int cluster, std::vector<Keypoint>& sharpKeypoints);
 
 
 

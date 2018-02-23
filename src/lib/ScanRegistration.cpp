@@ -532,8 +532,8 @@ void printVector(std::vector<int> vec)
   std::cout<<std::endl;
 }
 
-//void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans)
-void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans, pcl::PointCloud<pcl::PointXYZI>& downsampledCloud)
+void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans)
+//void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans, pcl::PointCloud<pcl::PointXYZI>& downsampledCloud)
 {
   int i=0;
 
@@ -573,8 +573,7 @@ void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::Point
           std::vector<float> curvatureMaxScale;
           std::vector<float> s;
           
-          std::vector<Keypoint> sharpKeypoints, flatKeypoints;
-          pcl::PointCloud<pcl::PointXYZI> lessFlatKeypoints;
+          std::vector<Keypoint> sharpKeypoints;
 
 
           /*std::stringstream ss2;
@@ -582,7 +581,7 @@ void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::Point
           pcl::io::savePCDFile<pcl::PointXYZI>(ss2.str (), *it2);*/
 
           computeScaleSpace(*it2, gaussian1, gaussian2, keypoints, s, curvatureMaxScale);
-          getFinalKeypointsAtMinScale(*it2, keypoints, s, curvatureMaxScale, c, sharpKeypoints, flatKeypoints, lessFlatKeypoints);
+          getFinalKeypointsAtMinScale(*it2, keypoints, s, curvatureMaxScale, c, sharpKeypoints);
 
           if(clusters.size()<=_config.nFeatureRegions)
           {
@@ -728,92 +727,7 @@ void ScanRegistration::extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::Point
 
       _surfacePointsLessFlat += surfPointsLessFlatScanDS;
 
-
-      //std::cout<<"Hola2"<<std::endl;
-
-      //extract _surfacePointsLessFlat
-      /*int a=0;
-      PointCloud<PointXYZI> downsampledCloudResult;
-      PointCloud<PointXYZI>::Ptr downsampledCloudTmp(new pcl::PointCloud<pcl::PointXYZI>);;
-
-      pcl::VoxelGrid<pcl::PointXYZI> downSizeFilter;
-      downSizeFilter.setLeafSize(_config.lessFlatFilterSize, _config.lessFlatFilterSize, _config.lessFlatFilterSize);
-
-      if(!sharpIndices.empty())
-      {
-        for (pcl::PointCloud<pcl::PointXYZI>::iterator it2 = it->begin() ; it2 != it->end(); ++it2)
-        {
-          if(!isIn(a, sharpIndices))
-          {
-            //std::cout<<"Hola1"<<std::endl;
-            downsampledCloudTmp->push_back(*it2);
-            //std::cout<<"Hola1.1"<<std::endl;          
-          }
-          else if(isIn(a, sharpIndices))
-          {
-            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 7, 0.85);
-            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 5, 0.85);
-            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 3);
-            //std::cout<<"Hola2"<<std::endl;
-            downSizeFilter.setInputCloud(downsampledCloudTmp);        
-            downSizeFilter.filter(downsampledCloudResult);
-            //std::cout<<"size:"<<downsampledCloudResult.size()<<std::endl;
-
-            if(!downsampledCloudResult.empty())
-            {
-              _surfacePointsFlat.push_back(downsampledCloudResult[downsampledCloudResult.size()/2]);
-              downsampledCloud += downsampledCloudResult;
-            }
-            
-            downsampledCloudResult.clear();
-            downsampledCloudTmp->clear();
-            //std::cout<<"Hola2.1"<<std::endl;
-          }
-          
-          if(a==it->size()-1)
-          {
-            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 7, 0.85);
-            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 5, 0.85);
-            //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 3);
-            //std::cout<<"Hola3"<<std::endl;
-            downSizeFilter.setInputCloud(downsampledCloudTmp);            
-            downSizeFilter.filter(downsampledCloudResult);
-            //std::cout<<"size:"<<downsampledCloudResult.size()<<std::endl;
-            if(!downsampledCloudResult.empty())
-            {
-              _surfacePointsFlat.push_back(downsampledCloudResult[downsampledCloudResult.size()/2]);
-              downsampledCloud += downsampledCloudResult;
-            }
-
-            downsampledCloudResult.clear();
-            downsampledCloudTmp->clear(); 
-            //std::cout<<"Hola3.1"<<std::endl;
-          }
-          a++;
-        }
-      }
-      else
-      {
-        //std::cout<<"Hola4"<<std::endl;
-        *downsampledCloudTmp = *it;
-        //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 7, 0.85);
-        //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 5, 0.85);
-        //getDownSampledPoints(downsampledCloudTmp, downsampledCloudResult, 3);
-        downSizeFilter.setInputCloud(downsampledCloudTmp);        
-        downSizeFilter.filter(downsampledCloudResult);
-        //std::cout<<"size:"<<downsampledCloudResult.size()<<std::endl;
-        if(!downsampledCloudResult.empty())
-        {
-          _surfacePointsFlat.push_back(downsampledCloudResult[downsampledCloudResult.size()/2]);
-          downsampledCloud += downsampledCloudResult;
-        }
-        
-        downsampledCloudResult.clear();
-        downsampledCloudTmp->clear();
-        //std::cout<<"Hola4.1"<<std::endl;
-      }
-      _surfacePointsLessFlat += downsampledCloud;*/
-      //extract _surfacePointsLessFlat
+      //Add flat keypoints computed by my own downsample algorithm?
 
     i++;
   }
@@ -947,8 +861,8 @@ void ScanRegistration::markAsPicked2(const size_t& cloudIdx,
 
 
 
-//void ScanRegistration::publishResult()
-void ScanRegistration::publishResult(pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer)
+void ScanRegistration::publishResult()
+//void ScanRegistration::publishResult(pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer)
 {
   // publish full resolution and feature point clouds
   publishCloudMsg(_pubLaserCloud,            _laserCloud,            _sweepStart, "/camera");
@@ -960,10 +874,10 @@ void ScanRegistration::publishResult(pcl::PointCloud<pcl::PointXYZI>::Ptr laserL
   publishCloudMsg(_pubSurfPointsFlat,        _surfacePointsFlat,     _sweepStart, "/camera");
   publishCloudMsg(_pubSurfPointsLessFlat,    _surfacePointsLessFlat, _sweepStart, "/camera");
 
-  sensor_msgs::PointCloud2 laserLayerMsg;
+  /*sensor_msgs::PointCloud2 laserLayerMsg;
   pcl::toROSMsg(*laserLayer, laserLayerMsg);
   laserLayerMsg.header.frame_id = "/camera";
-  pubLaserLayer.publish(laserLayerMsg);
+  pubLaserLayer.publish(laserLayerMsg);*/
 
 
   // publish corresponding IMU transformation information

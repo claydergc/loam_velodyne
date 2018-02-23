@@ -225,8 +225,8 @@ protected:
    * @param beginIdx the index of the first scan to extract features from
    */
   void extractFeatures(const uint16_t& beginIdx = 0);
-  //void extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans);
-  void extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans, pcl::PointCloud<pcl::PointXYZI>& downsampledCloud);
+  void extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans);
+  //void extractFeaturesCSS(std::vector<pcl::PointCloud<pcl::PointXYZI> > laserCloudScans, pcl::PointCloud<pcl::PointXYZI>& downsampledCloud);
 
   /** \brief Set up region buffers for the specified point range.
    *
@@ -260,8 +260,8 @@ protected:
 
 
   /** \brief Publish the current result via the respective topics. */
-  //void publishResult();
-  void publishResult(pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer);
+  void publishResult();
+  //void publishResult(pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer);
 
 
 private:

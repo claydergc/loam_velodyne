@@ -453,7 +453,8 @@ void computeScaleSpace(PointCloud<PointXYZI> in, vector<float> gaussian1[NUM_GAU
 
 //void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTriplet> keypoints[NUM_SCALES], vector<float> s, PointCloud<PointXYZI>& keypointsCloud)
 //void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTriplet> keypoints[NUM_SCALES], vector<float> s, vector<CurvatureTriplet>& finalKeypoints)
-void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTriplet> keypoints[NUM_SCALES], vector<float> s, vector<float> curvatureMaxScale, int cluster, vector<Keypoint>& cornerKeypoints, vector<Keypoint>& flatKeypoints, PointCloud<PointXYZI>& downsampledKeypoints)
+void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTriplet> keypoints[NUM_SCALES], vector<float> s, vector<float> curvatureMaxScale,
+								 int cluster, vector<Keypoint>& sharpKeypoints)
 {
 	vector<CurvatureTriplet> keypointsScaleIterator;
 	keypointsScaleIterator = keypoints[NUM_SCALES-1];
@@ -519,8 +520,7 @@ void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTripl
 		//cout<<endl;
 	}
 
-	cornerKeypoints.clear();
-	vector<int> keypointsIndices;
+	sharpKeypoints.clear();
 
 	//int diffSeparation = 500;
 
@@ -540,8 +540,7 @@ void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTripl
 				kp.index = keypointsFinalCounter[i].index;
 				kp.curvature = abs(keypointsScaleIterator[i].curvature);
 				kp.cluster = cluster;
-				cornerKeypoints.push_back(kp);
-				keypointsIndices.push_back(keypointsFinalCounter[i].index);
+				sharpKeypoints.push_back(kp);
 			}
 			else if(i>0 && keypointsFinalCounter[i].index!=keypointsFinalCounter[i-1].index)
 			{
@@ -555,8 +554,7 @@ void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTripl
 					kp.index = keypointsFinalCounter[i].index;
 					kp.curvature = abs(keypointsScaleIterator[i].curvature);
 					kp.cluster = cluster;
-					cornerKeypoints.push_back(kp);
-					keypointsIndices.push_back(keypointsFinalCounter[i].index);
+					sharpKeypoints.push_back(kp);
 				}
 			}
 
@@ -578,88 +576,4 @@ void getFinalKeypointsAtMinScale(PointCloud<PointXYZI> in, vector<CurvatureTripl
 
 
 	}
-
-	/*for(int i=0; i<cornerKeypoints.size(); ++i)
-	{
-		if(i>0)
-		{
-			if(cornerKeypoints[i].index-cornerKeypoints[i-1].index<3)
-			{
-				cout<<"ALERTAAAAAAAAAAAAAAAAAAAA!!!"<<endl;
-				cout<<cornerKeypoints[i].index<<","<<cornerKeypoints[i-1].index<<endl;
-			}
-		}
-	}*/
-
-
-	
-	//cout<<"Hey1"<<endl;
-
-
-	/*flatKeypoints.clear();
-	downsampledKeypoints.clear();
-	//Keypoints that are not corners
-	PointCloud<PointXYZI> downsampledCloud;
-	PointCloud<PointXYZI> downsampledCloudTmp;
-	int j=0;
-
-	//cout<<"kp idx size:"<<keypointsIndices.size()<<endl;
-	//cout<<"in size:"<<in.size()<<endl;
-
-	//for(int i=0; i<keypointsIndices.size(); ++i)
-		//cout<<"idx: "<<keypointsIndices[i]<<endl;
-
-	if(keypointsIndices.size()==0)
-	{
-		downsampledCloudTmp = in;
-		getDownSampledPoints(downsampledCloudTmp, downsampledCloud, 7, 0.85);
-		downsampledKeypoints += downsampledCloud;
-		downsampledCloud.clear();
-		downsampledCloudTmp.clear();
-	}
-	else
-	{
-		for(int i=0; i<in.size(); ++i)
-		{
-			if(i!=keypointsIndices[j])
-			{
-				downsampledCloudTmp.push_back(in[i]);
-				Keypoint kp;
-				kp.keypoint = in[i];
-				kp.index = i;
-				kp.curvature = abs(curvatureMaxScale[i]);
-				kp.cluster = cluster;
-				flatKeypoints.push_back(kp);
-				//cout<<"Hey1.1"<<endl;
-			}
-			else if(i==keypointsIndices[j] || i==in.size()-1)
-			{
-				//cout<<"Hey1.2"<<endl;
-				getDownSampledPoints(downsampledCloudTmp, downsampledCloud, 7, 0.85);
-				downsampledKeypoints += downsampledCloud;
-				j++;
-				downsampledCloud.clear();
-				downsampledCloudTmp.clear();
-				//cout<<"Hey1.3"<<endl;
-			}
-		}
-	}*/
-
-
-	//cout<<"Hey2"<<endl;
-
-	/*for(int j=0; j<keypointsFinalCounter.size(); ++j)
-	{
-		if(keypointsFinalCounter[j].counter>10)
-			finalKeypoints.push_back(keypointsScaleIterator[j]);
-			//keypointsCloud.push_back(in[keypointsFinalCounter[j].index]);
-	}*/
-
-	/*keypointsCloud.clear();
-
-	for(int j=0; j<keypointsFinalCounter.size(); ++j)
-	{
-		if(keypointsFinalCounter[j].counter>10)
-			keypointsCloud.push_back(in[keypointsFinalCounter[j].index]);
-	}*/
 }

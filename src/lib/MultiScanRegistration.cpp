@@ -251,7 +251,7 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   }
 
   //Agreagado por Clayder
-  pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer(new pcl::PointCloud<pcl::PointXYZI>());//organized cloud by ring
+  //pcl::PointCloud<pcl::PointXYZI>::Ptr laserLayer(new pcl::PointCloud<pcl::PointXYZI>());//organized cloud by ring
   //*laserLayer = laserCloudScans[5];
   //std::cout<<"CLOUD SIZE: "<<laserLayer->points.size()<<std::endl;
   //Agreagado por Clayder
@@ -271,12 +271,12 @@ void MultiScanRegistration::process(const pcl::PointCloud<pcl::PointXYZ>& laserC
   //extractFeatures();
 
   // linea agregada por Clayder para extraer features CSS
-  //extractFeaturesCSS(laserCloudScans);
-  extractFeaturesCSS(laserCloudScans, *laserLayer);
+  extractFeaturesCSS(laserCloudScans);
+  //extractFeaturesCSS(laserCloudScans, *laserLayer);
 
   // publish result
-  //publishResult();
-  publishResult(laserLayer);
+  publishResult();
+  //publishResult(laserLayer);
 }
 
 } // end namespace loam
